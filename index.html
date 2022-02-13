@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>data version control for the {targets} R package</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Will Landau" />
+    <script src="index_files/header-attrs-2.11/header-attrs.js"></script>
+    <link href="index_files/remark-css-0.0.1/default.css" rel="stylesheet" />
+    <link href="index_files/remark-css-0.0.1/default-fonts.css" rel="stylesheet" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+# data version control for the {targets} R package
+### Will Landau
+
+---
+
+
+&lt;style&gt;
+.inverse {
+background-color: transparent;
+text-shadow: 0 0 0px transparent;
+}
+.title-slide {
+vertical-align: bottom !important; 
+text-align: center !important;
+}
+.title-slide h1 {
+position: absolute;
+top: -50px;
+left: 0;
+right: 0;
+width: 100%;
+line-height: 4em;
+color: #666666;
+}
+.title-slide h2 {
+position: absolute;
+top: 0px;
+right: 0;
+left: 0;
+line-height: 6em;
+color: #666666;
+}
+.title-slide h3 {
+position: absolute;
+top: 400px;
+right: 0;
+left: 0;
+line-height: 6em;
+color: #666666;
+}
+.title-slide {
+background-color: white;
+background-image: url('images/gittargets.png');
+background-repeat: no-repeat;
+background-size: 25%;
+background-position: 25px 0px 0px 0px;
+}
+.remark-slide-content:after {
+content: "Copyright Eli Lilly and Company";
+position: absolute;
+bottom: -5px;
+left: 20px;
+height: 40px;
+width: 100%;
+font-family: Helvetica, Arial, sans-serif;
+font-size: 0.7em;
+color: #666666;
+background-repeat: no-repeat;
+background-size: contain;
+}
+&lt;/style&gt;
+
+
+
+# Pipeline tools
+
+* Existing pipeline tools: https://github.com/pditommaso/awesome-pipeline
+* Most are language-agnostic or designed for Python or the shell.
+* Different pipline toolkits have different priorities and tradeoffs:
+
+![](./images/tooltypes.png)
+
+---
+
+# {targets}
+
+&lt;center&gt;
+&lt;img src="./images/targets.png" height = "400px"&gt;
+&lt;/center&gt;
+
+* Make-like pipeline tool for R.
+* New developments add Airflow-like capabilities.
+
+---
+
+# Ecosystem around {targets}
+
+&lt;center&gt;
+&lt;img src="./images/targetopia.png" height = "400px"&gt;
+&lt;/center&gt;
+
+---
+
+# {targets} data store
+
+```
+_targets/ # Can be customized with tar_config_set().
+├── meta/
+├────── meta
+├────── process
+├────── progress
+├── objects/
+├────── target1 
+├────── target2
+├────── branching_target_c7bcb4bd
+├────── branching_target_285fb6a9
+├────── branching_target_874ca381
+├── scratch/ # tar_make() deletes this folder after it finishes.
+└── user/ # custom user storage for gittargets data version control.
+```
+
+---
+
+# Default data store tradeoffs are Make-like
+
+&lt;center&gt;
+&lt;img src="./images/scale.png" height = "300px"&gt;
+&lt;/center&gt;
+
+* Compactly represents the *current* state of the pipeline.
+* Does not contain historical data from past runs.
+
+---
+
+# Current pipeline is up to date...
+
+
+```r
+# _targets.R
+library(targets)
+list(
+  tar_target(data, airquality),
+  tar_target(model, lm(Ozone ~ Wind, data = data))
+)
+```
+
+
+```r
+tar_make() # All targets are up to date.
+#&gt; ✓ skip target data
+#&gt; ✓ skip target model
+#&gt; ✓ skip pipeline
+```
+
+---
+
+# But checking out old code invalidates a target!
+
+
+```r
+gert::git_branch_checkout(branch = "old-code-branch")
+```
+
+
+```r
+# _targets.R
+library(targets)
+list(
+  tar_target(data, airquality),
+* tar_target(model, lm(Ozone ~ Temp, data = data)) # old model
+)
+```
+
+
+```r
+tar_make() # The model is not up to date with the checked-out code.
+#&gt; ✓ skip target data
+*#&gt; • start target model # (Didn't I already run this ages ago?)
+#&gt; • built target model
+#&gt; • end pipeline
+```
+
+---
+
+# Solution 1: cloud storage
+
+
+```r
+# _targets.R file
+library(targets)
+tar_option_set(resources = tar_resources(
+  aws = tar_resources_aws(bucket = "my_versioned_bucket")
+))
+list(
+  tar_target(data, get_data(), format = "aws_parquet"),
+  tar_target(model, run_model(data), format = "aws_qs")
+)
+```
+
+* How to configure a cloud-backed version-aware pipeline:
+    1. Create an AWS S3 bucket and turn on versioning.
+    2. Supply the bucket to AWS resources.
+    3. Use AWS-backed storage formats.
+    4. Commit `_targets/meta/meta` to source code verison control.
+* Reverting to an earlier code commit recovers the up-to-date targets built with the old code.
+* Details: &lt;https://books.ropensci.org/targets/storage_amazon.html&gt;.
+* Google Cloud Storage support under development by [Mark Edmondson](https://github.com/MarkEdmondson1234).
+
+---
+
+# Solution 2: {gittargets}
+
+&lt;center&gt;
+&lt;img src="./images/gittargets.png" height = "300px"&gt;
+&lt;/center&gt;
+
+* Put the data store under version control.
+* Sync code commits with data commits.
+* Switch commits and branches without invalidating the pipeline.
+* Keep a historical record of the data from key milestones of the project.
+* Documentation: https://docs.ropensci.org/gittargets/
+
+---
+
+# {gittargets} workflow
+
+1. `targets::tar_make()` (or `tar_make_clustermq()` or `tar_make_future()`): run pipeline at least once.
+2. `gert::git_commit()`: commit code.
+3. `gittargets::tar_git_init()`: initialize data repository.
+4. `gittargets::tar_git_snapshot()`: create a data snapshot for the current code commit.
+5. `gittargets::tar_git_checkout()`: revert the data to the appropriate prior snapshot.
+
+---
+
+# Initialize data repository
+
+* Assumes the pipeline ran at least once.
+
+
+```r
+tar_git_init()
+#&gt; ✔ Created data store Git repository
+#&gt; ✔ Wrote to _targets/.gitattributes for git-lfs: &lt;https://git-lfs.github.com&gt;.
+#&gt; ✔ Created stub commit without data.
+#&gt; • Run tar_git_snapshot() to put the data files under version control.
+```
+
+---
+
+# Snapshot the data
+
+
+
+```r
+tar_git_snapshot()
+#&gt; • Creating data branch code=af36d7301844831adc4cdedffbcb802cecebb0d1.
+#&gt; • Staging data files.
+#&gt; ✔ Staged 6 files in the data store.
+#&gt; • Committing data changes.
+#&gt; ✔ Created new data snapshot b0641526e062fee82e5d3d2c88163ea4823bc1b8.
+#&gt; • Packing references.
+```
+---
+
+# Snapshot model
+
+&lt;center&gt;
+&lt;img src="./images/snapshot-model-git.png" height = "450px"&gt;
+&lt;/center&gt;
+
+---
+
+# Check out old code
+
+
+```r
+gert::git_branch_checkout("old-code-branch")
+```
+
+* Find code commits with data snapshots:
+
+
+```r
+tar_git_log()
+#&gt; # A tibble: 2 × 6
+#&gt;   message_code  message_data time_code           time_data           commit_code
+#&gt;   &lt;chr&gt;         &lt;chr&gt;        &lt;dttm&gt;              &lt;dttm&gt;              &lt;chr&gt;      
+#&gt; 1 Begin analyz… Begin analy… 2022-02-13 01:32:53 2022-02-13 01:32:55 af36d73018…
+#&gt; 2 Switch to UK… Switch to U… 2022-02-13 01:32:56 2022-02-13 01:32:57 e650867f85…
+#&gt; # … with 1 more variable: commit_data &lt;chr&gt;
+```
+
+---
+
+# Check out matching old data
+
+
+```r
+tar_git_checkout()
+#&gt; ✔ Checked out data snapshot b0641526e062fee82e5d3d2c88163ea4823bc1b8.
+#&gt; • Code commit: code=af36d7301844831adc4cdedffbcb802cecebb0d1
+#&gt; • Message: Begin analyzing the airquality dataset
+#&gt; • Resetting to HEAD of checked-out snapshot.
+```
+
+
+```r
+tar_make() # The old data files are synced with the old code.
+#&gt; ✓ skip target data
+#&gt; ✓ skip target model
+#&gt; ✓ skip pipeline
+```
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightLines": true
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>

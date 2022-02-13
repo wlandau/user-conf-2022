@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "locale": "en_US",
+  "platform": "4.1.2",
+  "metadata": {
+    "appmode": "static",
+    "primary_rmd": null,
+    "primary_html": "index.html",
+    "content_category": "site",
+    "has_parameters": false
+  },
+  "packages": null,
+  "files": {
+    "images/gittargets.png": {
+      "checksum": "4c1929b9c57cce14c2a4b96a270cb6e8"
+    },
+    "images/images.pptx": {
+      "checksum": "e5efbd9cf798b1ad79a590093366e3aa"
+    },
+    "images/infographic.png": {
+      "checksum": "08b103d4c825ea9a80798b765ebdc20d"
+    },
+    "images/scale.png": {
+      "checksum": "de525b88fb90e0984ed3a99469fea7e2"
+    },
+    "images/snapshot-model-git.png": {
+      "checksum": "a55b5231117f23b781d2bd2231063f30"
+    },
+    "images/targetopia.png": {
+      "checksum": "58e5971c21ae9c4762508de9e3616d4b"
+    },
+    "images/targets.png": {
+      "checksum": "5346ed955faa6a799c85d40b679cd033"
+    },
+    "images/tooltypes.png": {
+      "checksum": "6b0b073c1565c8c755eddc72f90c1eb0"
+    },
+    "index_files/header-attrs-2.11/header-attrs.js": {
+      "checksum": "9c32b58ed5fd8fe2efbd5bd7023cdef0"
+    },
+    "index_files/remark-css-0.0.1/default-fonts.css": {
+      "checksum": "3dcae1f613a817bfa7ad7e7748e1b0de"
+    },
+    "index_files/remark-css-0.0.1/default.css": {
+      "checksum": "d281055e66f0af38b96060f223243952"
+    },
+    "index.html": {
+      "checksum": "e511a30f4817136568e6e9321a32ad61"
+    }
+  },
+  "users": null
+}
