@@ -191,16 +191,16 @@ tar_option_set(resources = tar_resources(
   aws = tar_resources_aws(bucket = "my_versioned_bucket")
 ))
 list(
-  tar_target(data, get_data(), format = "aws_parquet"),
-  tar_target(model, run_model(data), format = "aws_qs")
+  tar_target(data, get_data(), repository = "aws"),
+  tar_target(model, run_model(data), repository = "aws")
 )
 ```
 
 * How to configure a cloud-backed version-aware pipeline:
     1. Create an AWS S3 bucket and turn on versioning.
     2. Supply the bucket to AWS resources.
-    3. Use AWS-backed storage formats.
-    4. Commit `_targets/meta/meta` to source code verison control.
+    3. Select AWS as the storage repository.
+    4. Commit `_targets/meta/meta` to source code version control.
 * Reverting to an earlier code commit recovers the up-to-date targets built with the old code.
 * Details: <https://books.ropensci.org/targets/storage_amazon.html>.
 * Google Cloud Storage support under development by [Mark Edmondson](https://github.com/MarkEdmondson1234).
