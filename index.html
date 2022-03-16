@@ -4,7 +4,7 @@
     <title>data version control for the {targets} R package</title>
     <meta charset="utf-8" />
     <meta name="author" content="Will Landau" />
-    <script src="index_files/header-attrs-2.11/header-attrs.js"></script>
+    <script src="index_files/header-attrs-2.13/header-attrs.js"></script>
     <link href="index_files/remark-css-0.0.1/default.css" rel="stylesheet" />
     <link href="index_files/remark-css-0.0.1/default-fonts.css" rel="stylesheet" />
   </head>
@@ -196,19 +196,19 @@ tar_option_set(resources = tar_resources(
   aws = tar_resources_aws(bucket = "my_versioned_bucket")
 ))
 list(
-  tar_target(data, get_data(), repository = "aws"),
-  tar_target(model, run_model(data), repository = "aws")
+  tar_target(data, get_data(), repository = "aws"), # or "gcp"
+  tar_target(model, run_model(data), repository = "aws") # or "gcp"
 )
 ```
 
 * How to configure a cloud-backed version-aware pipeline:
-    1. Create an AWS S3 bucket and turn on versioning.
-    2. Supply the bucket to AWS resources.
-    3. Select AWS as the storage repository.
-    4. Commit `_targets/meta/meta` to source code version control.
-* Reverting to an earlier code commit recovers the up-to-date targets built with the old code.
-* Details: &lt;https://books.ropensci.org/targets/storage_amazon.html&gt;.
-* Google Cloud Storage support under development by [Mark Edmondson](https://github.com/MarkEdmondson1234).
+    1. Create a bucket (either Amazon or Google) and turn on versioning.
+    2. Supply the bucket to target resources.
+    3. Select `repository = "aws"` (Amazon) or `"gcp"` (Google).
+    4. Commit the metadata file `_targets/meta/meta` to source code version control (Git).
+* Check out an old commmit to reproducibly roll back the pipeline. Recovers code and metadata together so targets stay up to date.
+* Details: &lt;https://books.ropensci.org/targets/data.html#cloud-storage&gt;.
+* Thanks [Mark Edmondson](https://github.com/MarkEdmondson1234) for GCP support.
 
 ---
 
