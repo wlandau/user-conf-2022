@@ -77,13 +77,70 @@ knitr::opts_chunk$set(
 )
 ```
 
+# Demanding computation in R
+
+* **Bayesian data analysis: JAGS, Stan, NIMBLE, `greta`**
+* Deep learning: `keras`, `tensorflow`, `torch`
+* Machine learning: `tidymodels`
+* PK/PD: `nlmixr`, `mrgsolve`
+* Clinical trial simulation: `rpact`, `Mediana`
+* Statistical genomics
+* Social network analysis
+* Permutation tests
+* Database queries: `DBI`
+* Big data ETL
+
+???
+
+A lot of work that happens in R is computationally demanding. Everything from machine learning to Bayesian statistics to ETL.
+
+---
+
+# Typical notebook-based project
+
+![](./images/notebook-start.png)
+
+???
+
+Most people organize a project using numbered scripts or notebooks. These notebooks run in a sequential order. Each notebook writes output files, and these output files become the input files of the next notebook.
+
+---
+
+# The complicated reality
+
+![](./images/notebook-end.png)
+
+???
+
+This approach does not scale, and the end product is not reproducible. You have to break the linear sequence in order to add steps. Intermediate files are cumbersome to micromanage, the code files get messy, the whole project gets messy, and it's too easy to lose track of what you're doing.
+
+---
+
 # Pipeline tools
+
+![](./images/pipeline_graph.png)
+
+* Orchestrate interdependent moving parts.
+* Scale the computation.
+* Manage results files.
+
+???
+
+Pipeline tools solve these problems. A pipeline tool orchestrates the overall flow of tasks from beginning to end, running the correct steps in the correct order and conditionally independent tasks in parallel. And most pipeline tools manage output. So for each task, you can trust that all the requisite data files are available and up to date.
+
+---
+
+# Types of pipeline tools
 
 * Existing pipeline tools: https://github.com/pditommaso/awesome-pipeline
 * Most are language-agnostic or designed for Python or the shell.
 * Different pipline toolkits have different priorities and tradeoffs:
 
 ![](./images/tooltypes.png)
+
+???
+
+Beyond that, different pipeline tools have different priorities. Apache Airflow and GNU Make are two examples. Airflow cares about data pipelines that run on a regular schedule, need to run completely from end to end every time, and need a complete historical record of all past results. Make, on the other hand, only cares about the *current* state of the input and output data, and it cares that the output is synchronized with the code and input it came from. If an output artifact is up to date with its dependencies, then Make will not bother to run that task. This really comes in handy for a data analysis project under active development. If your pipeline tool automatically figures out what to rerun and what to skip, you save an *enormous* amount of time, and you have the peace of mind that your input and output and code are synchronized, up to date, and reproducible.
 
 ---
 
@@ -96,6 +153,10 @@ knitr::opts_chunk$set(
 * Make-like pipeline tool for R.
 * New developments add Airflow-like capabilities.
 
+???
+
+The {targets} R package is a Make-like tool. It has the benefits of Make, such as skipping tasks that are already up to date. And it also preserves the look and feel of an R session. It nudges users toward good programming practices for the R language, and the interface abstracts away output data files so they look and feel like ordinary variables in R.
+
 ---
 
 # Ecosystem around {targets}
@@ -103,6 +164,10 @@ knitr::opts_chunk$set(
 <center>
 <img src="./images/targetopia.png" height = "400px">
 </center>
+
+???
+
+{targets} is extensible. Third-party interfaces make it easy to use {targets} for literate programming, heavy branching, and Bayesian data analysis.
 
 ---
 
@@ -124,6 +189,10 @@ _targets/ # Can be customized with tar_config_set().
 └── user/ # custom user storage for gittargets data version control.
 ```
 
+???
+
+The data storage system is simple. There is one file per target in the `objects` sub-folder, and the `tar_read()` function brings the data back into the R session. Multiple storage formats and modes of compression are available, including the Apache arrow formats like feather and parquet.
+
 ---
 
 # Default data store tradeoffs are Make-like
@@ -134,6 +203,10 @@ _targets/ # Can be customized with tar_config_set().
 
 * Compactly represents the *current* state of the pipeline.
 * Does not contain historical data from past runs.
+
+???
+
+This storage system is simple, lightweight, and completely aligned with the goals of {targets}. But on its own, it does have limitations. Like a typical Make-like tool, new output overwrites old output, and you only have the *current* state of the pipeline. Unless you take proactive steps to archive historical data files, they disappear.
 
 ---
 
@@ -154,6 +227,10 @@ tar_make() # All targets are up to date.
 #> ✓ skip target model
 #> ✓ skip pipeline
 ```
+
+???
+
+This gets tricky when you put the code under a version control system like Git. Here, we have an up-to-date targets pipeline. 
 
 ---
 
@@ -180,6 +257,12 @@ tar_make() # The model is not up to date with the checked-out code.
 #> • end pipeline
 ```
 
+???
+
+If you check out an old version of the *code*, and the data is still synced with a later version of the code, those targets are no longer up to date.
+
+Now, how do we keep the synchronization and time savings of a Make-like tool, but also get the history and versioning of an Airflow-like tool? The ecosystem around {targets} supports two major options.
+
 ---
 
 # Solution 1: cloud storage
@@ -205,6 +288,10 @@ list(
 * Details: <https://books.ropensci.org/targets/data.html#cloud-storage>.
 * Thanks [Mark Edmondson](https://github.com/MarkEdmondson1234) for GCP support.
 
+???
+
+First, the {targets} package itself supports storage in the cloud. If you supply a bucket in Amazon Web Services or Google Cloud, you can send target data there instead of your local machine. And if you turn on versioning in your bucket, {targets} automatically stores the version ID of each results file. That means if you track the project's metadata file in the same version control repository as the source code, all your past runs will be synchronized and available. In other words, when you check out an old Git commit, your data will roll back too, and your targets will stay up to date. And because up-to-date targets are skipped, this approach avoids duplicating output data like an Airflow tool might if it runs the full pipeline from scratch each time.
+
 ---
 
 # Solution 2: {gittargets}
@@ -219,6 +306,10 @@ list(
 * Keep a historical record of the data from key milestones of the project.
 * Documentation: https://docs.ropensci.org/gittargets/
 
+???
+
+For those of you without access to Amazon Web Services or Google Cloud, the {gittargets} R package is a completely local solution. {gittargets} creates a Git repository for the data store that stays synchronized with the Git repository of your source code. That way, when you check out an old commit in the code, it is straightforward to pull up the data snapshot that matches the commit. 
+
 ---
 
 # {gittargets} workflow
@@ -228,6 +319,12 @@ list(
 3. `gittargets::tar_git_init()`: initialize data repository.
 4. `gittargets::tar_git_snapshot()`: create a data snapshot for the current code commit.
 5. `gittargets::tar_git_checkout()`: revert the data to the appropriate prior snapshot.
+
+???
+
+Here's how it works. First, run the pipeline and commit your code to version control. Your targets should be up to date in the pipeline, and your code should be up to date in Git. Next, use tar_git_init() to create a Git repository for the {targets} data store, and use tar_git_snapshot() to commit the data files. Now, if you ever need to roll back the code to this commit, you can use tar_git_checkout() to roll back the data. If all goes well, you will have an older but still up-to-date set of targets.
+
+Let's demonstrate. 
 
 ---
 
@@ -243,6 +340,11 @@ tar_git_init()
 #> • Run tar_git_snapshot() to put the data files under version control.
 ```
 
+
+???
+
+Initializing the data repository is straightforward,
+
 ---
 
 # Snapshot the data
@@ -257,6 +359,11 @@ tar_git_snapshot()
 #> ✔ Created new data snapshot b0641526e062fee82e5d3d2c88163ea4823bc1b8.
 #> • Packing references.
 ```
+
+???
+
+and so is snapshotting the data.
+
 ---
 
 # Snapshot model
@@ -264,6 +371,10 @@ tar_git_snapshot()
 <center>
 <img src="./images/snapshot-model-git.png" height = "450px">
 </center>
+
+???
+
+A snapshot is a special git commit in the data that links to a commit in the code. All the data snapshots that match a code commit are in a branch with the code commit hash.
 
 ---
 
@@ -285,6 +396,10 @@ tar_git_log()
 #> # … with 1 more variable: commit_data <chr>
 ```
 
+???
+
+When you check out an old branch, you may or may not have a data snapshot for the code commit you switched to. If you are unsure, you can call tar_git_log() to find out.
+
 ---
 
 # Check out matching old data
@@ -303,3 +418,7 @@ tar_make() # The old data files are synced with the old code.
 #> ✓ skip target model
 #> ✓ skip pipeline
 ```
+
+???
+
+If you do have a matching snapshot, you can call tar_git_checkout() to pull up the data that matches the code commit. And now, you have an prior set of targets that matches this historical state of the code. 
