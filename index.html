@@ -4,7 +4,7 @@
     <title>data version control for the {targets} R package</title>
     <meta charset="utf-8" />
     <meta name="author" content="Will Landau" />
-    <script src="index_files/header-attrs-2.13/header-attrs.js"></script>
+    <script src="index_files/header-attrs-2.14/header-attrs.js"></script>
     <link href="index_files/remark-css-0.0.1/default.css" rel="stylesheet" />
     <link href="index_files/remark-css-0.0.1/default-fonts.css" rel="stylesheet" />
   </head>
@@ -12,8 +12,12 @@
     <textarea id="source">
 class: center, middle, inverse, title-slide
 
+.title[
 # data version control for the {targets} R package
+]
+.author[
 ### Will Landau
+]
 
 ---
 
@@ -119,9 +123,9 @@ This approach does not scale, and the end product is not reproducible. You have 
 
 ![](./images/pipeline_graph.png)
 
-* Orchestrate interdependent moving parts.
+* Orchestrate moving parts.
 * Scale the computation.
-* Manage results files.
+* Manage output files.
 
 ???
 
@@ -129,63 +133,167 @@ Pipeline tools solve these problems. A pipeline tool orchestrates the overall fl
 
 ---
 
-# Types of pipeline tools
+# {targets}
 
-* Existing pipeline tools: https://github.com/pditommaso/awesome-pipeline
-* Most are language-agnostic or designed for Python or the shell.
-* Different pipline toolkits have different priorities and tradeoffs:
+&lt;center&gt;
+&lt;img src="./images/targets.png" height = "300px"&gt;
+&lt;/center&gt;
+
+* Designed for R.
+* Encourages good programming habits.
+* Behind-the-scenes data management.
+* Distributed computing.
+
+???
+
+
+
+---
+
+# Example pipeline
+
+
+```r
+# _targets.R file (get started with use_targets())
+library(targets)
+library(tarchetypes)
+tar_option_set(packages = c("keras", "tidymodels"))
+options(clustermq.scheduler = "multisession") # clusters too
+source("R/custom_functions.R")
+
+list(
+  tar_target(raw_data, "raw_data_file.csv", format = "file"),
+  tar_target(tidy_data, munge_data(raw_data), format = "parquet"),
+  tar_target(bayesian_model, run_bayesian_model(tidy_data)),
+  tar_target(random_forest, run_random_forest(tidy_data)),
+  tar_target(deep_neural_net, run_dnn(tidy_data)),
+  tar_target(plot_bayes, vis_bayes(bayesian_model)),
+  tar_target(plot_rf, vis_rf(random_forest)),
+  tar_target(plot_dnn, vis_dnn(deep_neural_net)),
+  tar_render(markdown_report, "report.Rmd")
+)
+```
+
+---
+
+# tar_visnetwork()
+
+![](./images/pipeline_graph.png)
+
+---
+
+# Run the pipeline
+
+
+```r
+tar_make_clustermq(workers = 2)
+#&gt; ✓ skip target raw_data
+#&gt; ✓ skip target tidy_data
+#&gt; ✓ skip target deep_neural_net
+#&gt; • start target bayesian_model
+#&gt; • start target random_forest
+#&gt; ✓ skip target plot_dnn
+#&gt; • built target bayesian_model
+#&gt; • start target plot_bayes
+#&gt; • built target random_forest
+#&gt; • start target plot_rf
+#&gt; • built target plot_bayes
+#&gt; • built target plot_rf
+#&gt; • end pipeline: 30.02 minutes
+```
+
+---
+
+# Evidence of reproducibility
+
+
+```r
+tar_outdated()
+#&gt; character(0)
+```
+
+
+```r
+tar_make_clustermq(workers = 2)
+#&gt; ✓ skip target raw_data
+#&gt; ✓ skip target tidy_data
+#&gt; ✓ skip target deep_neural_net
+#&gt; ✓ skip target bayesian_model
+#&gt; ✓ skip target random_forest
+#&gt; ✓ skip target plot_rf
+#&gt; ✓ skip target plot_dnn
+#&gt; ✓ skip target plot_bayes
+#&gt; ✓ skip pipeline: 0.084 seconds
+```
+
+
+---
+
+# Other pipeline tools
+
+* Many exist: https://github.com/pditommaso/awesome-pipeline
+* Different tools have different features and tradeoffs.
 
 ![](./images/tooltypes.png)
+
+* {[gittargets](https://docs.ropensci.org/gittargets/)} and [cloud integration](https://books.ropensci.org/targets/data.html#cloud-storage) manage historical data for {[targets](https://docs.ropensci.org/targets/)}.
 
 ???
 
 Beyond that, different pipeline tools have different priorities. Apache Airflow and GNU Make are two examples. Airflow cares about data pipelines that run on a regular schedule, need to run completely from end to end every time, and need a complete historical record of all past results. Make, on the other hand, only cares about the *current* state of the input and output data, and it cares that the output is synchronized with the code and input it came from. If an output artifact is up to date with its dependencies, then Make will not bother to run that task. This really comes in handy for a data analysis project under active development. If your pipeline tool automatically figures out what to rerun and what to skip, you save an *enormous* amount of time, and you have the peace of mind that your input and output and code are synchronized, up to date, and reproducible.
 
----
-
-# {targets}
-
-&lt;center&gt;
-&lt;img src="./images/targets.png" height = "400px"&gt;
-&lt;/center&gt;
-
-* Make-like pipeline tool for R.
-* New developments add Airflow-like capabilities.
-
-???
 
 The {targets} R package is a Make-like tool. It has the benefits of Make, such as skipping tasks that are already up to date. And it also preserves the look and feel of an R session. It nudges users toward good programming practices for the R language, and the interface abstracts away output data files so they look and feel like ordinary variables in R.
 
 ---
 
-# Ecosystem around {targets}
+# Data access in {targets}
 
-&lt;center&gt;
-&lt;img src="./images/targetopia.png" height = "400px"&gt;
-&lt;/center&gt;
 
-???
-
-{targets} is extensible. Third-party interfaces make it easy to use {targets} for literate programming, heavy branching, and Bayesian data analysis.
+```r
+tar_read(tidy_data)
+#&gt; # A tibble: 7,043 × 21
+#&gt;    customerID gender SeniorCitizen Partner Dependents tenure PhoneService
+#&gt;    &lt;chr&gt;      &lt;chr&gt;          &lt;dbl&gt; &lt;chr&gt;   &lt;chr&gt;       &lt;dbl&gt; &lt;chr&gt;       
+#&gt;  1 7590-VHVEG Female             0 Yes     No              1 No          
+#&gt;  2 5575-GNVDE Male               0 No      No             34 Yes         
+#&gt;  3 3668-QPYBK Male               0 No      No              2 Yes         
+#&gt;  4 7795-CFOCW Male               0 No      No             45 No          
+#&gt;  5 9237-HQITU Female             0 No      No              2 Yes         
+#&gt;  6 9305-CDSKC Female             0 No      No              8 Yes         
+#&gt;  7 1452-KIOVK Male               0 No      Yes            22 Yes         
+#&gt;  8 6713-OKOMC Female             0 No      No             10 No          
+#&gt;  9 7892-POOKP Female             0 Yes     No             28 Yes         
+#&gt; 10 6388-TABGU Male               0 No      Yes            62 Yes         
+#&gt; # … with 7,033 more rows, and 14 more variables: MultipleLines &lt;chr&gt;,
+#&gt; #   InternetService &lt;chr&gt;, OnlineSecurity &lt;chr&gt;, OnlineBackup &lt;chr&gt;,
+#&gt; #   DeviceProtection &lt;chr&gt;, TechSupport &lt;chr&gt;, StreamingTV &lt;chr&gt;,
+#&gt; #   StreamingMovies &lt;chr&gt;, Contract &lt;chr&gt;, PaperlessBilling &lt;chr&gt;,
+#&gt; #   PaymentMethod &lt;chr&gt;, MonthlyCharges &lt;dbl&gt;, TotalCharges &lt;dbl&gt;, Churn &lt;chr&gt;
+```
 
 ---
 
 # {targets} data store
 
-```
-_targets/ # Can be customized with tar_config_set().
-├── meta/
-├────── meta
-├────── process
-├────── progress
-├── objects/
-├────── target1 
-├────── target2
-├────── branching_target_c7bcb4bd
-├────── branching_target_285fb6a9
-├────── branching_target_874ca381
-├── scratch/ # tar_make() deletes this folder after it finishes.
-└── user/ # custom user storage for gittargets data version control.
+
+```r
+fs::dir_tree("_targets")
+#&gt; _targets
+#&gt; ├── meta
+#&gt; │   ├── meta
+#&gt; │   ├── process
+#&gt; │   └── progress
+#&gt; ├── objects
+#&gt; │   ├── bayesian_model
+#&gt; │   ├── deep_neural_net
+#&gt; │   ├── plot_bayes
+#&gt; │   ├── plot_dnn
+#&gt; │   ├── plot_rf
+#&gt; │   ├── random_forest
+#&gt; │   ├── raw_data
+#&gt; │   └── tidy_data
+#&gt; └── user
 ```
 
 ???
@@ -194,104 +302,83 @@ The data storage system is simple. There is one file per target in the `objects`
 
 ---
 
-# Default data store tradeoffs are Make-like
+# {targets} metadata
 
-&lt;center&gt;
-&lt;img src="./images/scale.png" height = "300px"&gt;
-&lt;/center&gt;
 
-* Compactly represents the *current* state of the pipeline.
-* Does not contain historical data from past runs.
-
-???
-
-This storage system is simple, lightweight, and completely aligned with the goals of {targets}. But on its own, it does have limitations. Like a typical Make-like tool, new output overwrites old output, and you only have the *current* state of the pipeline. Unless you take proactive steps to archive historical data files, they disappear.
+```r
+tar_meta() # reads _targets/meta/meta
+#&gt; # A tibble: 8 × 18
+#&gt;   name     type  data  command depend    seed path  time                size  bytes format
+#&gt;   &lt;chr&gt;    &lt;chr&gt; &lt;chr&gt; &lt;chr&gt;   &lt;chr&gt;    &lt;int&gt; &lt;lis&gt; &lt;dttm&gt;              &lt;chr&gt; &lt;int&gt; &lt;chr&gt; 
+#&gt; 1 bayesia… stem  df47… 2d2dc8… f3915…  7.53e8 &lt;chr&gt; 2022-05-11 14:38:15 9294…  1276 rds   
+#&gt; 2 deep_ne… stem  df47… 2d2dc8… f3915… -2.15e8 &lt;chr&gt; 2022-05-11 14:37:17 9294…  1276 rds   
+#&gt; 3 plot_ba… stem  df47… ac4f51… 0a2b8…  1.70e9 &lt;chr&gt; 2022-05-11 14:38:15 9294…  1276 rds   
+#&gt; 4 plot_dnn stem  df47… 8782dd… 93270… -1.97e9 &lt;chr&gt; 2022-05-11 14:37:17 9294…  1276 rds   
+#&gt; 5 plot_rf  stem  df47… 90b285… 104bf…  1.37e9 &lt;chr&gt; 2022-05-11 14:38:15 9294…  1276 rds   
+#&gt; 6 random_… stem  df47… 2d2dc8… f3915…  4.76e8 &lt;chr&gt; 2022-05-11 14:38:15 9294…  1276 rds   
+#&gt; 7 raw_data stem  df47… ff67f4… 933dc… -9.80e8 &lt;chr&gt; 2022-05-11 14:37:17 9294…  1276 rds   
+#&gt; 8 tidy_da… stem  df47… 698a55… 4c4de… -1.09e9 &lt;chr&gt; 2022-05-11 14:37:17 9294…  1276 rds   
+#&gt; # … with 7 more variables: repository &lt;chr&gt;, iteration &lt;chr&gt;, parent &lt;lgl&gt;,
+#&gt; #   children &lt;list&gt;, seconds &lt;dbl&gt;, warnings &lt;lgl&gt;, error &lt;lgl&gt;
+```
 
 ---
 
-# Current pipeline is up to date...
+# Core {targets} data management
 
+&lt;br&gt;
 
-```r
-# _targets.R
-library(targets)
-list(
-  tar_target(data, airquality),
-  tar_target(model, lm(Ozone ~ Wind, data = data))
-)
-```
+![](./images/tradeoffs.png)
 
+&lt;br&gt;
 
-```r
-tar_make() # All targets are up to date.
-#&gt; ✓ skip target data
-#&gt; ✓ skip target model
-#&gt; ✓ skip pipeline
-```
+## Solutions
 
-???
-
-This gets tricky when you put the code under a version control system like Git. Here, we have an up-to-date targets pipeline. 
-
----
-
-# But checking out old code invalidates a target!
-
-
-```r
-gert::git_branch_checkout(branch = "old-code-branch")
-```
-
-
-```r
-# _targets.R
-library(targets)
-list(
-  tar_target(data, airquality),
-* tar_target(model, lm(Ozone ~ Temp, data = data)) # old model
-)
-```
-
-
-```r
-tar_make() # The model is not up to date with the checked-out code.
-#&gt; ✓ skip target data
-*#&gt; • start target model # (Didn't I already run this ages ago?)
-#&gt; • built target model
-#&gt; • end pipeline
-```
-
-???
-
-If you check out an old version of the *code*, and the data is still synced with a later version of the code, those targets are no longer up to date.
-
-Now, how do we keep the synchronization and time savings of a Make-like tool, but also get the history and versioning of an Airflow-like tool? The ecosystem around {targets} supports two major options.
+1. Cloud integration: [books.ropensci.org/targets/data.html#cloud-storage](https://books.ropensci.org/targets/data.html#cloud-storage)
+2. {gittargets}: [docs.ropensci.org/gittargets/](https://docs.ropensci.org/gittargets/)
 
 ---
 
 # Solution 1: cloud storage
 
+1. Create a bucket (either Amazon or Google) and turn on versioning.
+2. Supply the bucket to `tar_resources()`.
+3. Select `repository = "aws"` (Amazon) or `"gcp"` (Google).
+4. Commit the metadata file `_targets/meta/meta` to the same version control repository as the analysis code.
+
+## Benefits
+
+* Rolling back the code also rolls back the data.
+* If your targets were up to date when the commit was created, they stay up to date after the rollback.
+* More: &lt;https://books.ropensci.org/targets/data.html#cloud-storage&gt;.
+
+---
+
+# Target script with cloud storage
+
 
 ```r
-# _targets.R file
+# _targets.R file (get started with use_targets())
 library(targets)
-tar_option_set(resources = tar_resources(
-  aws = tar_resources_aws(bucket = "my_versioned_bucket")
-))
+tar_option_set(
+  packages = c("keras", "tidymodels"),
+  resources = tar_resources(
+*   aws = tar_resources_aws(bucket = "my_versioned_bucket")
+  )
+)
+# ...
+
 list(
-  tar_target(data, get_data(), repository = "aws"), # or "gcp"
-  tar_target(model, run_model(data), repository = "aws") # or "gcp"
+  # ...
+  tar_target(
+    bayesian_model,
+    run_bayesian_model(tidy_data),
+*   repository = "aws" # or "gcp"
+  )
+  # ...
 )
 ```
 
-* How to configure a cloud-backed version-aware pipeline:
-    1. Create a bucket (either Amazon or Google) and turn on versioning.
-    2. Supply the bucket to target resources.
-    3. Select `repository = "aws"` (Amazon) or `"gcp"` (Google).
-    4. Commit the metadata file `_targets/meta/meta` to source code version control (Git).
-* Check out an old commmit to reproducibly roll back the pipeline. Recovers code and metadata together so targets stay up to date.
-* Details: &lt;https://books.ropensci.org/targets/data.html#cloud-storage&gt;.
-* Thanks [Mark Edmondson](https://github.com/MarkEdmondson1234) for GCP support.
 
 ???
 
@@ -305,10 +392,9 @@ First, the {targets} package itself supports storage in the cloud. If you supply
 &lt;img src="./images/gittargets.png" height = "300px"&gt;
 &lt;/center&gt;
 
-* Put the data store under version control.
-* Sync code commits with data commits.
-* Switch commits and branches without invalidating the pipeline.
-* Keep a historical record of the data from key milestones of the project.
+* Puts the data under version control outside the code repository.
+* Syncs data snapshots with contemporaneous code commits.
+* Rolls back data when you roll back code so your targets stay up to date.
 * Documentation: https://docs.ropensci.org/gittargets/
 
 ???
@@ -319,11 +405,13 @@ For those of you without access to Amazon Web Services or Google Cloud, the {git
 
 # {gittargets} workflow
 
-1. `targets::tar_make()` (or `tar_make_clustermq()` or `tar_make_future()`): run pipeline at least once.
-2. `gert::git_commit()`: commit code.
-3. `gittargets::tar_git_init()`: initialize data repository.
-4. `gittargets::tar_git_snapshot()`: create a data snapshot for the current code commit.
-5. `gittargets::tar_git_checkout()`: revert the data to the appropriate prior snapshot.
+| Package | Function | Action
+---|---|---|---
+1 | `targets` | `tar_make()` | Run the pipeline.
+2 | `gert` | `git_commit()` | Commit code to version control.
+3 | `gittargets` | `tar_git_init()` | Create data repository.
+4 | `gittargets` | `tar_git_snapshot()` | Snapshot the data.
+5 | `gittarget` | `tar_git_checkout()` | Roll back data to match code.
 
 ???
 
@@ -361,7 +449,7 @@ Initializing the data repository is straightforward,
 tar_git_snapshot()
 #&gt; • Creating data branch code=af36d7301844831adc4cdedffbcb802cecebb0d1.
 #&gt; • Staging data files.
-#&gt; ✔ Staged 6 files in the data store.
+#&gt; ✔ Staged 11 files in the data store.
 #&gt; • Committing data changes.
 #&gt; ✔ Created new data snapshot b0641526e062fee82e5d3d2c88163ea4823bc1b8.
 #&gt; • Packing references.
@@ -400,8 +488,8 @@ tar_git_log()
 #&gt; # A tibble: 2 × 6
 #&gt;   message_code  message_data time_code           time_data           commit_code
 #&gt;   &lt;chr&gt;         &lt;chr&gt;        &lt;dttm&gt;              &lt;dttm&gt;              &lt;chr&gt;      
-#&gt; 1 Begin analyz… Begin analy… 2022-02-13 01:32:53 2022-02-13 01:32:55 af36d73018…
-#&gt; 2 Switch to UK… Switch to U… 2022-02-13 01:32:56 2022-02-13 01:32:57 e650867f85…
+#&gt; 1 First commit  First commi… 2022-02-13 01:32:53 2022-02-13 01:32:55 e8ad30b018…
+#&gt; 2 Update data   Update data  2022-02-13 01:32:56 2022-02-13 01:32:57 777b678f85…
 #&gt; # … with 1 more variable: commit_data &lt;chr&gt;
 ```
 
@@ -417,22 +505,41 @@ When you check out an old branch, you may or may not have a data snapshot for th
 ```r
 tar_git_checkout()
 #&gt; ✔ Checked out data snapshot b0641526e062fee82e5d3d2c88163ea4823bc1b8.
-#&gt; • Code commit: code=af36d7301844831adc4cdedffbcb802cecebb0d1
-#&gt; • Message: Begin analyzing the airquality dataset
+#&gt; • Code commit: code=e8ad30b01844831adc4cdedffbcb802cecebb0d1
+#&gt; • Message: First commit
 #&gt; • Resetting to HEAD of checked-out snapshot.
 ```
 
 
 ```r
 tar_make() # The old data files are synced with the old code.
-#&gt; ✓ skip target data
-#&gt; ✓ skip target model
-#&gt; ✓ skip pipeline
+#&gt; ✓ skip target raw_data
+#&gt; ✓ skip target tidy_data
+#&gt; ✓ skip target deep_neural_net
+#&gt; ✓ skip target bayesian_model
+#&gt; ✓ skip target random_forest
+#&gt; ✓ skip target plot_rf
+#&gt; ✓ skip target plot_dnn
+#&gt; ✓ skip target plot_bayes
+#&gt; ✓ skip pipeline: 0.092 seconds
 ```
 
 ???
 
 If you do have a matching snapshot, you can call tar_git_checkout() to pull up the data that matches the code commit. And now, you have an prior set of targets that matches this historical state of the code. 
+
+---
+
+# Thanks
+
+* [Mark Edmondson](https://github.com/MarkEdmondson1234) contributed Google Cloud Storage support in {targets}.
+* [rOpenSci](https://ropensci.org/) reviewed, adopted, and promoted {targets} and {gittargets}.
+* rOpenSci [reviewers](https://github.com/ropensci/software-review/issues/401) of {targets} and {tarchetypes}:
+    * [Samantha Oliver](https://github.com/limnoliver)
+    * [TJ Mahr](https://github.com/tjmahr)
+* rOpensci [reviewers](https://github.com/ropensci/software-review/issues/486) of {gittargets}:
+    * [Saras Windecker](https://github.com/smwindecker)
+    * [David Neuzerling](https://github.com/mdneuzerling)
     </textarea>
 <style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
 <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
@@ -478,6 +585,19 @@ if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
     deleted = true;
   });
 })();
+// add `data-at-shortcutkeys` attribute to <body> to resolve conflicts with JAWS
+// screen reader (see PR #262)
+(function(d) {
+  let res = {};
+  d.querySelectorAll('.remark-help-content table tr').forEach(tr => {
+    const t = tr.querySelector('td:nth-child(2)').innerText;
+    tr.querySelectorAll('td:first-child .key').forEach(key => {
+      const k = key.innerText;
+      if (/^[a-z]$/.test(k)) res[k] = t;  // must be a single letter (key)
+    });
+  });
+  d.body.setAttribute('data-at-shortcutkeys', JSON.stringify(res));
+})(document);
 (function() {
   "use strict"
   // Replace <script> tags in slides area to make them executable
