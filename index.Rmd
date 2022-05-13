@@ -133,11 +133,11 @@ Some pipeline tools even manage *historical* output, and that's actually where I
 
 ---
 
-# {targets}
+<br>
 
-<center>
-<img src="./images/targets.png" height = "300px">
-</center>
+![](./images/logo-tweet.png)
+
+<br>
 
 * Designed for R.
 * Encourages good programming habits.
