@@ -105,7 +105,7 @@ A lot of work that happens in R is computationally demanding. Everything from ma
 
 ???
 
-Most people organize a project using numbered scripts or notebooks. These notebooks run in a sequential order. Each notebook writes output files, and these output files become the input files of the next notebook.
+It's common practice to manage the complexity of a project in a sequence of numbered scripts or notebooks. These notebooks run one by one, each notebook writes its own set of output files, and the output files of one notebook become the input files of the next notebook.
 
 ---
 
@@ -115,7 +115,7 @@ Most people organize a project using numbered scripts or notebooks. These notebo
 
 ???
 
-This approach does not scale, and the end product is not reproducible. You have to break the linear sequence in order to add steps. Intermediate files are cumbersome to micromanage, the code files get messy, the whole project gets messy, and it's too easy to lose track of what you're doing.
+But for anything even a little bit complicated, this approach breaks down. You have to break the linear sequence of notebooks in order to add steps. Intermediate files are cumbersome to micromanage, the code files get messy. If you want to run tasks in parallel, it gets even messier. And it's too easy to lose track of what you're doing. The end product is not computationally reproducible.
 
 ---
 
@@ -130,7 +130,9 @@ This approach does not scale, and the end product is not reproducible. You have 
 
 ???
 
-Pipeline tools solve these problems. A pipeline tool orchestrates the overall flow of tasks from beginning to end, running the correct steps in the correct order and conditionally independent tasks in parallel. And most pipeline tools manage output. So for each task, you can trust that all the requisite data files are available and up to date.
+Pipeline tools solve these problems. A pipeline tool orchestrates the overall flow of tasks from beginning to end, running the correct steps in the correct order, and conditionally independent tasks can run in parallel. And for most pipeline tools, output data is managed behind the scenes. So for each task, you can trust that all the requisite data files are available in the right place.
+
+Some pipeline tools even manage *historical* output, and that's actually where I'm going to go with this talk.
 
 ---
 
@@ -142,12 +144,17 @@ Pipeline tools solve these problems. A pipeline tool orchestrates the overall fl
 
 * Designed for R.
 * Encourages good programming habits.
+* Automatic dependency detection.
 * Behind-the-scenes data management.
 * Distributed computing.
 
 ???
 
+But first, the {targets} R package. Most pipeline tools try to be language-agnostic, and {targets} stands out because it  works *within* the language. You can write complex pipelines that scale, but what you're doing as a user still looks and feels like you're just using R.
 
+1. You write ordinary functions to prepare data and run models, which we should all be doing anyway.
+2. You declare tasks that call those functions.
+3. Then the {targets} package actually runs the project. It automatically knows which tasks depend on which other tasks, how to run those tasks in parallel, and how to store the data.
 
 ---
 
@@ -175,11 +182,19 @@ list(
 )
 ```
 
+???
+
+Here's how it works. To use {targets}, you create a targets file, which is just an R script that brings together the different components of the project. The use_targets() function actually writes a template targets file for you, and all you do is follow the comments and fill in the blanks. When you're done, it will look something like this. First, you declare  packages, options, settings, and functions, just as if you were setting up a regular R session. And then at the bottom you declare a list of tasks, or "targets", that run when the project runs. Each target has a command, which is bit of R code that calls your functions, and a name, which is a symbol. When the target runs, the command runs, and the return value is assigned to the name. At that point, the target looks and feels like an ordinary variable in R, but it's stored as a file in a safe place.
+
 ---
 
 # tar_visnetwork()
 
 ![](./images/pipeline_graph.png)
+
+???
+
+Remember that nice graph from a couple slides ago? {targets} automatically generates it with the tar_visnetwork() function. The graph describes the progression of the pipeline in a natural left-to-right flow, and it shows which targets are already up to date and which targets are out of sync with the code and data they depend on. In this graph, one model is up to date, and the others need a refresh.
 
 ---
 
@@ -203,30 +218,9 @@ tar_make_clustermq(workers = 2)
 #&gt; • end pipeline: 30.02 minutes
 ```
 
----
+???
 
-# Evidence of reproducibility
-
-
-```r
-tar_outdated()
-#&gt; character(0)
-```
-
-
-```r
-tar_make_clustermq(workers = 2)
-#&gt; ✓ skip target raw_data
-#&gt; ✓ skip target tidy_data
-#&gt; ✓ skip target deep_neural_net
-#&gt; ✓ skip target bayesian_model
-#&gt; ✓ skip target random_forest
-#&gt; ✓ skip target plot_rf
-#&gt; ✓ skip target plot_dnn
-#&gt; ✓ skip target plot_bayes
-#&gt; ✓ skip pipeline: 0.084 seconds
-```
-
+When you run the pipeline, the correct targets run in the correct order - in this case, distributed over two parallel processes - and the output data is sent to storage. The deep neural net is automatically skipped because it's already up to date, and the other two models automatically run to get back in sync with their upstream dependencies. This selective skipping and running is an *enormous* time saver, and it creates a peace of mind that you don't know you need until you feel it the first time. And that's what {targets} cares about.
 
 ---
 
@@ -241,10 +235,7 @@ tar_make_clustermq(workers = 2)
 
 ???
 
-Beyond that, different pipeline tools have different priorities. Apache Airflow and GNU Make are two examples. Airflow cares about data pipelines that run on a regular schedule, need to run completely from end to end every time, and need a complete historical record of all past results. Make, on the other hand, only cares about the *current* state of the input and output data, and it cares that the output is synchronized with the code and input it came from. If an output artifact is up to date with its dependencies, then Make will not bother to run that task. This really comes in handy for a data analysis project under active development. If your pipeline tool automatically figures out what to rerun and what to skip, you save an *enormous* amount of time, and you have the peace of mind that your input and output and code are synchronized, up to date, and reproducible.
-
-
-The {targets} R package is a Make-like tool. It has the benefits of Make, such as skipping tasks that are already up to date. And it also preserves the look and feel of an R session. It nudges users toward good programming practices for the R language, and the interface abstracts away output data files so they look and feel like ordinary variables in R.
+But different pipeline tools may care about different things. {targets} is a lot like GNU Make, which only cares about the current state of the project and skips tasks that are already up to date. But Apache Airflow is another key player in this ecosystem, and its priorities are totally different. Airflow cares about data pipelines that run on a regular schedule, need to run end-to-end from scratch every time, and need a complete historical record of all past results. Those features are valuable too, but they weren't always possible with {targets} by itself.
 
 ---
 
@@ -273,6 +264,10 @@ tar_read(tidy_data)
 #&gt; #   PaymentMethod &lt;chr&gt;, MonthlyCharges &lt;dbl&gt;, TotalCharges &lt;dbl&gt;, Churn &lt;chr&gt;
 ```
 
+???
+
+And that has to do with how {targets} stores its data. If you've used {targets} before, you probably know about the tar_read() function, which takes the file of a target that already ran and brings it back into the R session.
+
 ---
 
 # {targets} data store
@@ -299,7 +294,7 @@ fs::dir_tree("_targets")
 
 ???
 
-The data storage system is simple. There is one file per target in the `objects` sub-folder, and the `tar_read()` function brings the data back into the R session. Multiple storage formats and modes of compression are available, including the Apache arrow formats like feather and parquet.
+Behind the scenes, tar_read() is going into this data store and looking in the "objects" folder for the actual data. The data could be a serialized R data file, or RDS file, or it could be another format like feather or parquet. To learn what format it has and how to read it, tar_read() looks at the metadata file in the "meta" folder.
 
 ---
 
@@ -323,6 +318,10 @@ tar_meta() # reads _targets/meta/meta
 #&gt; #   children &lt;list&gt;, seconds &lt;dbl&gt;, warnings &lt;lgl&gt;, error &lt;lgl&gt;
 ```
 
+???
+
+You can read the metadata file using tar_meta(). It has the name of each target, along with the hashes of the code, data, and dependencies for the most recent run of the pipeline, as well as other information like the random number generator seed used to run the command. There's also the "path" column, which says where each target is stored, the cloud bucket it's in, and the version ID if the bucket is versioned. More on that soon.
+
 ---
 
 # Core {targets} data management
@@ -338,6 +337,11 @@ tar_meta() # reads _targets/meta/meta
 1. Cloud integration: [books.ropensci.org/targets/data.html#cloud-storage](https://books.ropensci.org/targets/data.html#cloud-storage)
 2. {gittargets}: [docs.ropensci.org/gittargets/](https://docs.ropensci.org/gittargets/)
 
+
+???
+
+I chose this design for {targets} because it's simple, compact, resilient, efficient, and easy to understand. The downside is that it only tracks the current state of the pipeline. In the default scenario, there's no record of the past runs you did. However, the simplicity and compactness of the data store opens up a world of possibilities for third-party tools to come and help. Third-party tools that *specialize* in version control and can afford to do more for historical data.
+
 ---
 
 # Solution 1: cloud storage
@@ -352,6 +356,12 @@ tar_meta() # reads _targets/meta/meta
 * Rolling back the code also rolls back the data.
 * If your targets were up to date when the commit was created, they stay up to date after the rollback.
 * More: &lt;https://books.ropensci.org/targets/data.html#cloud-storage&gt;.
+
+???
+
+The easiest plug-and-play solution for historical data is integration with cloud storage. You can use Amazon Web Services Simple Storage Service, or S3, or Google Cloud Storage. Either way, you create a bucket, and you turn versioning on. You declare the bucket in the options, and you set the `repository` setting to "aws" or "gcp" for targets you want to store in the cloud. Then, in the version control repository for the source code of your project, track the lightweight metadata text file in the {targets} data store. The metadata tracks the version ID of each cloud target in the bucket.
+
+Now, you're prepared. Continue to develop the analysis, run the project, and commit the code with that metadata with the target version IDs. If you ever need to roll back the project, just check out an old commit of the code. The metadata rolls back with it, which rolls back the version IDs of the targets. In other words, when the code goes back in time, the data goes back with it, and your pipeline stays synchronized. Not only are the old results available, the targets are up to date too. So you don't need to waste hours rerunning historical results just to get a reproducible pipeline again.
 
 ---
 
@@ -383,7 +393,7 @@ list(
 
 ???
 
-First, the {targets} package itself supports storage in the cloud. If you supply a bucket in Amazon Web Services or Google Cloud, you can send target data there instead of your local machine. And if you turn on versioning in your bucket, {targets} automatically stores the version ID of each results file. That means if you track the project's metadata file in the same version control repository as the source code, all your past runs will be synchronized and available. In other words, when you check out an old Git commit, your data will roll back too, and your targets will stay up to date. And because up-to-date targets are skipped, this approach avoids duplicating output data like an Airflow tool might if it runs the full pipeline from scratch each time.
+Here's how it works in the target script. Most people will probably want to set the bucket in `tar_option_set()` and the repository in `tar_target()`, but you could do both in one or both in the other. In fact, you could use different buckets for different targets, and you could send some targets to Amazon and other targets to Google.
 
 ---
 
@@ -400,7 +410,7 @@ First, the {targets} package itself supports storage in the cloud. If you supply
 
 ???
 
-For those of you without access to Amazon Web Services or Google Cloud, the {gittargets} R package is a completely local solution. {gittargets} creates a Git repository for the data store that stays synchronized with the Git repository of your source code. That way, when you check out an old commit in the code, it is straightforward to pull up the data snapshot that matches the commit. 
+On the other hand, not everyone has access to cloud services. It's a steep learning curve, and it could get expensive. For a completely local solution that doesn't need the cloud at all, the {gittargets} package is another way to track your data over time.
 
 ---
 
@@ -416,9 +426,9 @@ For those of you without access to Amazon Web Services or Google Cloud, the {git
 
 ???
 
-Here's how it works. First, run the pipeline and commit your code to version control. Your targets should be up to date in the pipeline, and your code should be up to date in Git. Next, use tar_git_init() to create a Git repository for the {targets} data store, and use tar_git_snapshot() to commit the data files. Now, if you ever need to roll back the code to this commit, you can use tar_git_checkout() to roll back the data. If all goes well, you will have an older but still up-to-date set of targets.
+Here's how it works. First, run the pipeline and commit your code to version control with Git. That much is standard procedure for a {targets} project. Next, use tar_git_init() to create a Git repository for the {targets} data store. The data repository is separate from the code repository because there is usually a lot of data, and we still want to be able to push the code to GitHub or GitLab.
 
-Let's demonstrate. 
+Now comes the main part of {gittargets}. When you reach a strategic milestone in your project, when your targets are up to date in the pipeline and your code is up to date in Git, use tar_git_snapshot() to commit the data files. This data commit makes a special reference to the code commit that was active at the time. So if you ever roll back the code to this commit, tar_git_checkout() rolls back the data to match that code. Then, not only do you have historical targets in your workspace, those old targets are up to date with the old code you checked out.
 
 ---
 
@@ -438,7 +448,7 @@ tar_git_init()
 
 ???
 
-Initializing the data repository is straightforward,
+Let's demonstrate. So we've already run the pipeline and commited the code to version control. Now, we create the data repository. When that happens, it also sets gitattributes to use Git LFS if it's on your system.
 
 ---
 
@@ -458,7 +468,7 @@ tar_git_snapshot()
 
 ???
 
-and so is snapshotting the data.
+Then, we make a data snapshot. {gittargets} creates this "code=" branch, where that hash is the SHA key of the currently active code commit. 
 
 ---
 
@@ -470,16 +480,11 @@ and so is snapshotting the data.
 
 ???
 
-A snapshot is a special git commit in the data that links to a commit in the code. All the data snapshots that match a code commit are in a branch with the code commit hash.
+Those data branch names are how code commits map to data commits. Each data branch corresponds to a code commit where you made a snapshot, and only the latest data commit for each code comit really counts.
 
 ---
 
 # Check out old code
-
-
-```r
-gert::git_branch_checkout("old-code-branch")
-```
 
 * Find code commits with data snapshots:
 
@@ -494,13 +499,20 @@ tar_git_log()
 #&gt; # … with 1 more variable: commit_data &lt;chr&gt;
 ```
 
+
+
 ???
 
-When you check out an old branch, you may or may not have a data snapshot for the code commit you switched to. If you are unsure, you can call tar_git_log() to find out.
+The `tar_git_log()` function tells you which code commits have data commits.
 
 ---
 
-# Check out matching old data
+# Check out old code and matching old data
+
+
+```r
+gert::git_branch_checkout("old-code-branch") # branch with "First commit"
+```
 
 
 ```r
@@ -510,6 +522,12 @@ tar_git_checkout()
 #&gt; • Message: First commit
 #&gt; • Resetting to HEAD of checked-out snapshot.
 ```
+
+???
+
+Then, you can check out the old code commit and and the old matching data.
+
+---
 
 
 ```r
@@ -527,7 +545,7 @@ tar_make() # The old data files are synced with the old code.
 
 ???
 
-If you do have a matching snapshot, you can call tar_git_checkout() to pull up the data that matches the code commit. And now, you have an prior set of targets that matches this historical state of the code. 
+If your past self committed an up-to-date pipeline before, the checked-out pipeline will be up to date now.
 
 ---
 
@@ -541,6 +559,11 @@ If you do have a matching snapshot, you can call tar_git_checkout() to pull up t
 * rOpensci [reviewers](https://github.com/ropensci/software-review/issues/486) of {gittargets}:
     * [Saras Windecker](https://github.com/smwindecker)
     * [David Neuzerling](https://github.com/mdneuzerling)
+
+???
+
+I want to thank to Mark Edmondson for implementing the internals of the Google Cloud Storage backend in {targets}. Also thanks to rOpenSci and the reviewers of {targets} and {gittargets}.
+
     </textarea>
 <style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
 <script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
