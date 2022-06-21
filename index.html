@@ -154,7 +154,7 @@ Some pipeline tools even manage *historical* output, meaning they hold onto outp
 
 First, the {targets} R package. Most pipeline tools try to be language-agnostic, and this is why {targets} stands out. {targets}, unlike most of its peers, works *within* the language. You can write complex pipelines that scale, but what you're doing as a user still looks and feels like you're just using R: everything from the abstraction of files as R objects, to the way you can dynamically branch over dplyr groups or rows of a data frame, to integration with {knitr} and R Markdown.
 
-And how it works is you write ordinary functions to prepare data and run models (which we should all be doing anyway), you declare tasks that call those functions (those will be your targets, the steps of the computation), and then the {targets} package actually runs the project. It automatically knows which tasks depend on which other tasks, how to run those tasks in parallel, and how to store the data.
+And how it works is you write ordinary functions to prepare data and run models (which is a good practice anyway), you declare tasks that call those functions (those will be your targets, the steps of the computation), and then the {targets} package actually runs the project. It automatically knows which tasks depend on which other tasks, how to run those tasks in parallel, and how to store the data.
 
 ---
 
